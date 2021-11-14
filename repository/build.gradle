@@ -12,6 +12,9 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
     api 'org.springframework:spring-jdbc:5.3.10'
+    api 'com.zaxxer:HikariCP:5.0.0'
+    api 'org.springframework:spring-context:5.3.10'
+
 }
 
 test {

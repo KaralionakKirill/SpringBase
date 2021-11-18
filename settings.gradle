@@ -11,4 +11,5 @@ rootProject.name = 'SpringBase'
 include 'repository'
 include 'service'
 include 'web'
+include 'facade'
 

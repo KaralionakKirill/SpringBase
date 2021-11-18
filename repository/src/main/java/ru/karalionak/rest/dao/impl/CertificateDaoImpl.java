@@ -1,79 +1,68 @@
 package ru.karalionak.rest.dao.impl;
 
-import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 import ru.karalionak.rest.dao.CertificateDao;
 import ru.karalionak.rest.entity.Certificate;
 import ru.karalionak.rest.query.OrderedViewQuery;
-import ru.karalionak.rest.query.impl.QueryHelperImpl;
+import ru.karalionak.rest.query.QueryHelper;
 
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @Repository
 public class CertificateDaoImpl extends AbstractDao<Certificate> implements CertificateDao {
+    public static final String FIND_CERTIFICATE_WITH_TAGS = "SELECT * FROM gift_certificates " +
+            "JOIN gift_certificate_tag gct on gift_certificates.id = gct.certificate_id " +
+            "JOIN tags on tags.id = gct.tag_id WHERE id=?";
     private static final String CREATE_CERTIFICATE =
-            "INSERT INTO gift_certificates(certificate_name, description, price, duration) VALUES(?, ?, ?, ?)";
+            "INSERT INTO gift_certificates(certificate_name, description, price, duration) " +
+                    "VALUES(:name, :description, :price, :duration) RETURNING id";
     private static final String CREATE_REFERENCE_BETWEEN_CERTIFICATE_TAG =
             "INSERT INTO gift_certificate_tag(certificate_id, tag_id) VALUES(?,?)";
-    private static final String FIND_CERTIFICATE_BY_TAG_ID =
-            "SELECT * FROM gift_certificates JOIN gift_certificate_tag gct on gift_certificates.id = gct.certificate_id " +
-                    "WHERE gct.tag_id=?";
     private final static String TABLE_NAME = "gift_certificates";
-    private final QueryHelperImpl queryHelper;
     private final ResultSetExtractor<List<Certificate>> certificateExtractor;
 
-    public CertificateDaoImpl(JdbcTemplate jdbcTemplate, QueryHelperImpl queryHelper,
-                              RowMapper<Certificate> certificateRowMapper,
+    public CertificateDaoImpl(NamedParameterJdbcTemplate namedJdbcTemplate, JdbcTemplate jdbcTemplate,
+                              RowMapper<Certificate> certificateRowMapper, QueryHelper queryHelper,
                               ResultSetExtractor<List<Certificate>> certificateExtractor) {
-        super(jdbcTemplate, certificateRowMapper, TABLE_NAME);
-        this.queryHelper = queryHelper;
+        super(namedJdbcTemplate, jdbcTemplate, certificateRowMapper, TABLE_NAME, queryHelper);
         this.certificateExtractor = certificateExtractor;
     }
 
     @Override
-    public void create(Certificate certificate) {
-        jdbcTemplate.update(CREATE_CERTIFICATE, certificate.getName(), certificate.getDescription(),
-                certificate.getPrice(), certificate.getDuration());
+    public long create(Certificate certificate) {
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        BeanPropertySqlParameterSource parameterSource = new BeanPropertySqlParameterSource(certificate);
+        namedJdbcTemplate.update(CREATE_CERTIFICATE, parameterSource, keyHolder);
+        return Objects.requireNonNull(keyHolder.getKey(),
+                "Database did not return primary key after certificate creation").longValue();
     }
 
     @Override
     public void update(Certificate certificate) {
         Map<String, Object> updatedFields = findUpdatedFields(certificate);
-        if(updatedFields.size() > 0){
+        if (updatedFields.size() > 0) {
             String query = updateQuery + queryHelper.buildUpdateQuery(updatedFields.keySet());
-            jdbcTemplate.update(query, updatedFields.values().toArray());
+            Collection<Object> values = updatedFields.values();
+            values.add(certificate.getId());
+            jdbcTemplate.update(query, values.toArray());
         }
     }
 
     @Override
     public void addTags(long certificateId, List<Long> tagIds) {
-        jdbcTemplate.batchUpdate(CREATE_REFERENCE_BETWEEN_CERTIFICATE_TAG, new BatchPreparedStatementSetter() {
-            @Override
-            public void setValues(PreparedStatement ps, int i) throws SQLException {
-                ps.setLong(1, certificateId);
-                ps.setLong(2, tagIds.get(i));
-            }
-
-            @Override
-            public int getBatchSize() {
-                return tagIds.size();
-            }
-        });
+        BeanPropertySqlParameterSource[] parameters = tagIds.stream()
+                .map(BeanPropertySqlParameterSource::new)
+                .toArray(BeanPropertySqlParameterSource[]::new);
+        namedJdbcTemplate.batchUpdate(CREATE_REFERENCE_BETWEEN_CERTIFICATE_TAG, parameters);
     }
 
-
-    @Override
-    public List<Certificate> findCertificateByTagId(long tagId) {
-        return jdbcTemplate.query(FIND_CERTIFICATE_BY_TAG_ID, rowMapper, tagId);
-    }
 
     @Override
     public List<Certificate> findCertificateWithTags(OrderedViewQuery orderedViewQuery) {
@@ -81,26 +70,21 @@ public class CertificateDaoImpl extends AbstractDao<Certificate> implements Cert
     }
 
 
-    @Override
-    public Optional<Certificate> findByName(String name) {
-        return findByColumn("certificate_name", name).stream().findAny();
-    }
-
-    private Map<String, Object> findUpdatedFields(Certificate  certificate){
+    private Map<String, Object> findUpdatedFields(Certificate certificate) {
         Map<String, Object> fields = new LinkedHashMap<>();
-        if(certificate.getName() != null){
+        if (certificate.getName() != null) {
             fields.put("certificate_name", certificate.getName());
         }
-        if(certificate.getDescription() != null){
+        if (certificate.getDescription() != null) {
             fields.put("description", certificate.getDescription());
         }
-        if(certificate.getPrice() != null){
+        if (certificate.getPrice() != null) {
             fields.put("price", certificate.getPrice());
         }
-        if(certificate.getDuration() > 0){
+        if (certificate.getDuration() > 0) {
             fields.put("duration", certificate.getDuration());
         }
-        if(certificate.getCreateDate() != null){
+        if (certificate.getCreateDate() != null) {
             fields.put("create_date", certificate.getCreateDate());
         }
         return fields;

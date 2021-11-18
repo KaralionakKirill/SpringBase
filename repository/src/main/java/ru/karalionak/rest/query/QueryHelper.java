@@ -8,4 +8,8 @@ public interface QueryHelper {
     String buildSortingQuery(SortingContext sortingContext);
 
     String buildRegex(String pattern);
+
+    String buildFilteringQuery(String filteringField, int amount);
+
+    String buildInsertingQuery(int amount);
 }

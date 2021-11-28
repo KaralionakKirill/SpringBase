@@ -16,12 +16,10 @@ public class QueryHelperImpl implements QueryHelper {
 
     @Override
     public String buildUpdateQuery(Set<String> columns) {
-        StringBuilder query = new StringBuilder("last_update_date=NOW()");
-        for (String column : columns) {
-            query.append(", ")
-                    .append(column)
-                    .append("=?");
-        }
+        StringBuilder query = new StringBuilder("last_update_date=NOW(), ");
+        query.append(columns.stream()
+                .map(column -> column + "=?")
+                .collect(Collectors.joining(", ")));
         query.append(" WHERE id=?");
         return query.toString();
     }
@@ -42,5 +40,31 @@ public class QueryHelperImpl implements QueryHelper {
     @Override
     public String buildRegex(String pattern) {
         return String.format("%s%s%s", ANY_STRING_REGEX, pattern, ANY_STRING_REGEX);
+    }
+
+    @Override
+    public String buildFilteringQuery(String filteringField, int amount) {
+        StringBuilder query = new StringBuilder(" WHERE ");
+        query.append(filteringField).append(" IN(");
+        for (int i = 0; i < amount; i++) {
+            if (i != 0) {
+                query.append(", ");
+            }
+            query.append("?");
+        }
+        query.append(")");
+        return query.toString();
+    }
+
+    @Override
+    public String buildInsertingQuery(int amount) {
+        StringBuilder query = new StringBuilder();
+        for(int i = 0; i < amount; i++){
+            if(i != 0){
+                query.append(", ");
+            }
+            query.append("(?)");
+        }
+        return query.toString();
     }
 }

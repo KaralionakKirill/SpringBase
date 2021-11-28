@@ -3,7 +3,7 @@ package ru.karalionak.rest.dao;
 import java.util.Optional;
 
 public interface Dao<T> {
-    void create(T entity);
+    long create(T entity);
 
     void delete(long id);
 
